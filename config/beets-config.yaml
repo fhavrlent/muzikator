@@ -1,0 +1,87 @@
+# beets config for muzikator CD ripping pipeline
+# This file is used as a template — rip-cd.sh injects directory/library paths at runtime.
+
+# These get overwritten by rip-cd.sh at runtime:
+directory: ~/Music/muzikator
+library: ~/Music/muzikator/library.db
+
+import:
+  write: yes
+  move: yes
+  quiet: no             # interactive — show MusicBrainz matches for confirmation
+  autotag: yes
+  resume: yes
+  from_scratch: no      # use existing metadata as hints
+  default_action: apply
+  languages: en
+  detail: yes           # show per-track matching details
+
+plugins: musicbrainz chroma fetchart embedart inline fromfilename
+
+# Acoustic fingerprinting (needs fpcalc installed)
+chroma:
+  auto: yes
+
+# Album art
+fetchart:
+  auto: yes
+  sources: coverart musicbrainz
+
+embedart:
+  auto: yes
+  maxwidth: 1000
+
+musicbrainz:
+  searchlimit: 5
+
+# CD rips have no artist/album/title metadata, so the default distance weights
+# (3.0 each) heavily penalize empty fields and push the score above the match
+# threshold. We lower those weights and raise the threshold so beets actually
+# shows the correct match instead of "No matching release found".
+match:
+  medium_rec_thresh: 0.40   # default 0.25 — CD rips with empty tags score ~0.32
+  distance_weights:
+    artist: 1.0             # default 3.0 — always empty on CD rips
+    album: 1.0              # default 3.0 — always empty on CD rips
+    track_title: 1.0        # default 3.0 — always empty on CD rips
+    track_length: 3.0       # default 2.0 — duration is the best signal for CD rips
+    track_index: 2.0        # default 1.0 — trust our TRACKNUMBER tags
+  preferred:
+    media: ['CD']
+  # Prevent silent candidate rejection (known beets bugs #1665, #5610)
+  required: []
+  ignored: []
+  ignored_media: []
+
+ui:
+  color: yes
+
+# Inline field: conditional disc number prefix matching Picard default template
+# Single-disc: "01 Title"
+# Multi-disc (<10 discs): "1-01 Title"
+# Multi-disc (>=10 discs): "01-01 Title"
+item_fields:
+  disc_and_track: |
+    dt = disctotal or 1
+    d = disc or 1
+    t = track or 0
+    if dt > 1:
+      if dt > 9:
+        disc_part = f"{d:02d}-"
+      else:
+        disc_part = f"{d}-"
+    else:
+      disc_part = ""
+    return f"{disc_part}{t:02d}"
+
+paths:
+  default: $albumartist/$album/$disc_and_track $title
+  comp: $albumartist/$album/$disc_and_track $artist - $title
+  singleton: Non-Album/$artist - $title
+
+replace:
+  '[\\/<>:"\?\*\|]': _
+  '^\\.': _
+  '\\.$': _
+  '\\s+$': ''
+  '^\\s+': ''
